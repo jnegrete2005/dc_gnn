@@ -6,19 +6,26 @@ readme = "README.md"
 authors = [
     { name = "Joaquin Negrete", email = "joaquin.negrete03@gmail.com" }
 ]
-requires-python = ">=3.13"
+requires-python = ">=3.13, <3.14"
 dependencies = [
     "dotenv>=0.9.9",
     "joblib>=1.5.3",
     "jupyter>=1.1.1",
+    "matplotlib>=3.10.8",
     "nbdime>=4.0.4",
     "pandas>=3.0.1",
+    "pyg-lib>=0.5.0",
     "pymysql>=1.1.2",
     "rdkit>=2025.9.5",
     "scikit-learn>=1.8.0",
     "sqlalchemy>=2.0.47",
     "torch==2.8.0",
     "torch-geometric>=2.7.0",
+]
+
+[tool.uv]
+environments = [
+    "sys_platform == 'linux'",
 ]
 
 [[tool.uv.index]]
@@ -28,3 +35,4 @@ explicit = true
 
 [tool.uv.sources]
 torch = { index = "pytorch-cu129" }
+pyg-lib = { url = "https://data.pyg.org/whl/torch-2.8.0%2Bcu129/pyg_lib-0.5.0%2Bpt28cu129-cp313-cp313-linux_x86_64.whl" }
