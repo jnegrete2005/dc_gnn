@@ -19,8 +19,8 @@ def train_eval(model: Model, train_loader: LinkNeighborLoader, val_loader: LinkN
     model_save_path = f"data/{version}/best_model.pth"
 
     model = model.to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.1)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=0.001)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
 
     best_model_weights = deepcopy(model.state_dict())
     current_best_val_loss = float('inf')
@@ -49,7 +49,7 @@ def train_eval(model: Model, train_loader: LinkNeighborLoader, val_loader: LinkN
             best_model_weights = deepcopy(model.state_dict())
             current_best_val_loss = val_loss
 
-        # Check if we have a new best model
+        # Check for global best model and save if it's the best we've seen
         best_val_loss = check_best_model(model, val_loss, best_val_loss, model_save_path)
         if not history["saved_model"] and best_val_loss == val_loss:
             history["saved_model"] = True

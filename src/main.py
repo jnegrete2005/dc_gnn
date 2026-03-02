@@ -38,7 +38,7 @@ def plot_history(history: dict, version: str = "v1"):
     save_path = f"data/{version}/training_curve.png"
     epochs = range(1, len(history['train_loss']) + 1)
 
-    plt.figure(figsize=(12, 5))
+    plt.figure(figsize=(12, 5), dpi=180)
     plt.plot(epochs, history['train_loss'], label='Train Loss', color='green')
     plt.plot(epochs, history['valid_loss'], label='Validation Loss', color='blue')
     best_epoch = epochs[history['valid_loss'].index(min(history['valid_loss']))]

@@ -1,6 +1,6 @@
 [project]
 name = "dc-gnn"
-version = "0.1.0"
+version = "1.0.0"
 description = "Pipeline for the GNN for drug combinations"
 readme = "README.md"
 authors = [
