@@ -1,10 +1,8 @@
 import os
 
-import torch
-
-from torch_geometric import seed_everything
-
 import matplotlib.pyplot as plt
+import torch
+from torch_geometric import seed_everything
 
 from src.data import get_loader, split_data
 from src.eval import validation

@@ -1,14 +1,13 @@
 import os
-import tqdm
+from copy import deepcopy
 
 import torch
 import torch.nn.functional as F
 from torch_geometric.loader import LinkNeighborLoader
+import tqdm
 
-from copy import deepcopy
-
-from src.gnn import Model
 from src.eval import validation
+from src.gnn import Model
 
 EPOCHS = 100
 
@@ -24,6 +23,7 @@ def train_eval(model: Model, train_loader: LinkNeighborLoader, val_loader: LinkN
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.1)
 
     best_model_weights = deepcopy(model.state_dict())
+    current_best_val_loss = float('inf')
     best_val_loss = get_best_loss(model, val_loader, model_save_path)
 
     history = {
@@ -44,6 +44,12 @@ def train_eval(model: Model, train_loader: LinkNeighborLoader, val_loader: LinkN
 
         scheduler.step()
 
+        # Check for local best model based on validation loss
+        if val_loss < current_best_val_loss:
+            best_model_weights = deepcopy(model.state_dict())
+            current_best_val_loss = val_loss
+
+        # Check if we have a new best model
         best_val_loss = check_best_model(model, val_loss, best_val_loss, model_save_path)
         if not history["saved_model"] and best_val_loss == val_loss:
             history["saved_model"] = True

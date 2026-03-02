@@ -14,3 +14,5 @@ wheels/
 
 # Pytorch Models
 *.pth
+
+data/*/*.png
