@@ -1,4 +1,5 @@
 import os
+from sys import argv
 
 import matplotlib.pyplot as plt
 import torch
@@ -82,6 +83,7 @@ def plot_history(history: dict, version: str = "v1"):
 if __name__ == "__main__":
     seed_everything(42)
 
-    version = "v1.3"
+    version = "v1.3.0"
+    val_mode = "--val" in argv
     os.makedirs(f"data/{version}", exist_ok=True)
-    main(version)
+    main(version, train=not val_mode)
