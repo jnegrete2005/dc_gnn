@@ -90,7 +90,7 @@ def train(model: Model, train_loader: LinkNeighborLoader, optimizer: torch.optim
 
 def get_best_loss(model: Model, val_loader: LinkNeighborLoader, model_save_path: str) -> float:
     if not os.path.exists(model_save_path):
-        return float('inf'), deepcopy(model.state_dict())
+        return float('inf')
 
     temp_model = deepcopy(model)
     best_model_weights = torch.load(model_save_path, weights_only=True)
