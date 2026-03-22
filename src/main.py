@@ -13,13 +13,17 @@ from src.train import train_eval
 
 
 def main(version, train=True):
-    data = torch.load("data/graph.pt", weights_only=False)
+    data = torch.load("data/graph_ones.pt", weights_only=False)
+
+    batch_size = 128
+    hidden_channels = 64
+    out_channels = 16
 
     train_data, val_data, _ = split_data(data, train_ratio=0.8)
-    train_loader = get_loader(train_data, batch_size=128, shuffle=True)
-    val_loader = get_loader(val_data, batch_size=128, shuffle=False)
+    train_loader = get_loader(train_data, batch_size=batch_size, shuffle=True)
+    val_loader = get_loader(val_data, batch_size=batch_size, shuffle=False)
 
-    base_model = Model(hidden_channels=128, out_channels=32, data=train_data)
+    base_model = Model(hidden_channels=hidden_channels, out_channels=out_channels, data=train_data)
 
     if train:
         model = train_model(base_model, train_loader, val_loader, version)
@@ -83,7 +87,7 @@ def plot_history(history: dict, version: str = "v1"):
 if __name__ == "__main__":
     seed_everything(42)
 
-    version = "v1.3.0"
+    version = "v0.1.0"
     val_mode = "--val" in argv
     os.makedirs(f"data/{version}", exist_ok=True)
     main(version, train=not val_mode)
