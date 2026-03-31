@@ -8,7 +8,7 @@ from src.gnn import Model
 
 
 def validation(model: Model, val_loader: LinkNeighborLoader):
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     model = model.to(device)
 
@@ -33,6 +33,6 @@ def validation(model: Model, val_loader: LinkNeighborLoader):
     preds_binary = pred_probs > 0.5
     ground_truth = ground_truth.numpy()
 
-    class_report = classification_report(ground_truth, preds_binary, zero_division=0)
+    class_report = classification_report(ground_truth, preds_binary, zero_division=0.0)
 
     return val_loss, class_report
