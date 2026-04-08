@@ -3,6 +3,7 @@ import itertools
 import numpy as np
 from torch_geometric.data import HeteroData
 from tqdm import tqdm
+import wandb
 
 from src.data import get_loader, split_data
 from src.eval import validation
@@ -23,14 +24,24 @@ def nested_cv(data: HeteroData, outer: int = 3, inner: int = 2) -> tuple[float, 
     outer_test_results = []
     best_params_per_outer: list[dict] = []
 
-    for _ in tqdm(range(outer), desc="Outer CV Folds"):
+    for i, _ in enumerate(tqdm(range(outer), desc="Outer CV Folds")):
         outer_train_data, _, outer_test_data = split_data(data, val_ratio=0.0, test_ratio=0.2)
         outer_test_loader = get_loader(outer_test_data, batch_size=128, shuffle=False)
 
         best_inner_val_loss = float("inf")
         best_params: dict = {}
 
-        for params in tqdm(param_combinations, desc="Inner CV Hyperparameter Combinations", leave=False):
+        for j, params in enumerate(tqdm(param_combinations, desc="Inner CV Hyperparameter Combinations", leave=False)):
+            combo_name = f"LR:{params['lr']} | HC:{params['hidden_channels']} | OC:{params['out_channels']}"
+            wandb.init(
+                entity="medal-upm",
+                project="drug-comb-gnn",
+                name=f"lr_{params['lr']}_hc_{params['hidden_channels']}_oc_{params['out_channels']}",
+                group=f"outer_fold_{i}",
+                config={**params, "combo_name": combo_name},
+                reinit=True,
+            )
+
             inner_val_losses = []
 
             for _ in range(inner):
@@ -66,10 +77,14 @@ def nested_cv(data: HeteroData, outer: int = 3, inner: int = 2) -> tuple[float, 
                     inner_val_loader,
                     lr=params["lr"],
                     show_progress=False,
+                    fold_idx=i,
                 )
                 inner_val_losses.append(min(history["valid_loss"]))
 
             avg_val_loss = np.mean(inner_val_losses)
+
+            wandb.log({"avg_val_loss": avg_val_loss})
+            wandb.finish()
 
             if avg_val_loss < best_inner_val_loss:
                 best_inner_val_loss = avg_val_loss

@@ -22,6 +22,7 @@ dependencies = [
     "sqlalchemy>=2.0.47",
     "torch==2.8.0",
     "torch-geometric>=2.7.0",
+    "wandb>=0.25.1",
 ]
 
 [tool.uv]

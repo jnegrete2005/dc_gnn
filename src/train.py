@@ -4,6 +4,7 @@ import torch
 import torch.nn.functional as F
 from torch_geometric.loader import LinkNeighborLoader
 import tqdm
+import wandb
 
 from src.eval import validation
 from src.gnn import Model
@@ -17,6 +18,7 @@ def train_eval(
     val_loader: LinkNeighborLoader,
     lr: float,
     show_progress: bool = True,
+    fold_idx: int | None = None,
 ) -> tuple[Model, dict]:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -40,6 +42,9 @@ def train_eval(
         history["valid_loss"][epoch] = val_loss
 
         scheduler.step()
+
+        if wandb.run is not None:
+            wandb.log({f"train_loss_fold_{fold_idx}": train_loss, f"val_loss_fold_{fold_idx}": val_loss})
 
         # Check for local best model based on validation loss
         if val_loss < best_val_loss:
