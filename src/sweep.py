@@ -1,66 +1,75 @@
 import numpy as np
 import torch
-
 import wandb
+
 from src.data import get_loader, split_data
 from src.gnn import Model
 from src.train import train_eval
 
-sweep_config = {
-    "method": "bayes",
-    "metric": {
-        "name": "val_loss",
-        "goal": "minimize",  # Tell W&B we want the lowest score possible
-    },
-    "parameters": {
-        "lr": {
-            "values": [0.005, 0.001, 0.0005, 0.0001],
-        },
-        "hidden_channels": {
-            "values": [64, 128, 256],
-        },
-        "out_channels": {
-            "values": [32, 64],
-        },
-    },
-}
-
-# Load your data once globally so it doesn't reload every run
-full_data = torch.load("data/graph.pt", weights_only=False)
+# Global variables for the sweep agent (since it doesn't take arguments)
+_SWEEP_DATA = None
+_SWEEP_GRAPH_TYPE = None
+_SWEEP_TRACKER = None
 
 
-# 2. Define the training function
 def sweep_train():
-    # Initialize the run. W&B will automatically assign the ID, name, and config!
-    wandb.init()
+    # Use a dummy config first to get parameters from sweep agent
+    run = wandb.init()
+    
+    # Get structured config and add metadata
+    structured_config = _SWEEP_TRACKER.get_structured_config(_SWEEP_DATA, _SWEEP_GRAPH_TYPE, dict(wandb.config))
+    structured_config["metadata"] = {
+        "job_type": "sweep",
+        "fold": None
+    }
+    
+    # Update wandb config with structured format and metadata
+    wandb.config.update(structured_config, allow_val_change=True)
+    
+    # Set the job_type for the run explicitly since we didn't use init_run
+    run.job_type = "sweep"
 
-    # Grab the parameters the Cloud Brain chose for this specific run
-    lr = wandb.config.lr
-    hidden_channels = wandb.config.hidden_channels
-    out_channels = wandb.config.out_channels
-    #
-    # Do a standard split (e.g., 80% train, 20% val)
-    train_data, val_data, _ = split_data(full_data, val_ratio=0.2, test_ratio=0.0)
+    # Train on full data for the sweep (Step 4)
+    train_data, val_data, _ = split_data(_SWEEP_DATA, val_ratio=0.2, test_ratio=0.0)
 
     train_loader = get_loader(train_data, batch_size=128, shuffle=True)
     val_loader = get_loader(val_data, batch_size=128, shuffle=False)
 
     model = Model(
-        hidden_channels=hidden_channels,
-        out_channels=out_channels,
+        hidden_channels=wandb.config.model["hidden_channels"],
+        out_channels=wandb.config.model["out_channels"],
         data=train_data,
     )
 
-    # Train the model.
-    _, history = train_eval(model, train_loader, val_loader, lr=lr, show_progress=False)
+    # Train and log using tracker
+    _, history = train_eval(
+        model, train_loader, val_loader, lr=wandb.config.model["lr"], show_progress=False, tracker=_SWEEP_TRACKER
+    )
 
-    # The final validation loss W&B uses to decide what parameters to test next
-    final_val_loss = min(history["valid_loss"])
-
-    # Log the final metric matching the name in your sweep_config
-    wandb.log({"val_loss": final_val_loss})
+    final_roc_auc = max(history["roc_auc"])
+    # Return the metric W&B sweep uses to optimize
+    wandb.log({"roc_auc": final_roc_auc})
 
 
-if __name__ == "__main__":
+def run_sweep(data, graph_type, tracker, count=20):
+    global _SWEEP_DATA, _SWEEP_GRAPH_TYPE, _SWEEP_TRACKER
+    _SWEEP_DATA = data
+    _SWEEP_GRAPH_TYPE = graph_type
+    _SWEEP_TRACKER = tracker
+
+    sweep_config = {
+        "method": "bayes",
+        "metric": {"name": "roc_auc", "goal": "maximize"},
+        "parameters": {
+            "lr": {"values": [0.005, 0.001, 0.0005, 0.0001]},
+            "hidden_channels": {"values": [64, 128, 256]},
+            "out_channels": {"values": [32, 64]},
+        },
+    }
+
     sweep_id = wandb.sweep(sweep_config, project="drug-comb-gnn")
-    wandb.agent(sweep_id, function=sweep_train, count=20)  # Run 20 different sets of hyperparameters
+    wandb.agent(sweep_id, function=sweep_train, count=count)
+
+    # In a real scenario, you'd fetch the best params from W&B API here
+    # and return them. For now, we'll just complete the sweep.
+    return {"status": "sweep_completed"}

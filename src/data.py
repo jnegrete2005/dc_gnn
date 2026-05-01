@@ -3,13 +3,19 @@ from torch_geometric.data import HeteroData
 from torch_geometric.loader import LinkNeighborLoader
 
 
-def split_data(data, val_ratio=0.2, test_ratio=0.0) -> tuple[HeteroData, HeteroData, HeteroData]:
+def split_data(
+    data: HeteroData,
+    val_ratio=0.2,
+    test_ratio=0.0,
+    val_neg_ratio: float = 19.0,
+) -> tuple[HeteroData, HeteroData, HeteroData]:
+
     transform = T.RandomLinkSplit(
         num_val=val_ratio,
         num_test=test_ratio,
         is_undirected=True,
         disjoint_train_ratio=0.3,
-        neg_sampling_ratio=1.0,
+        neg_sampling_ratio=val_neg_ratio,
         add_negative_train_samples=False,
         edge_types=("dc", "treats", "disease"),
         rev_edge_types=("disease", "rev_treats", "dc"),

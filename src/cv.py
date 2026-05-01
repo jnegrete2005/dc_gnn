@@ -3,7 +3,6 @@ import itertools
 import numpy as np
 from torch_geometric.data import HeteroData
 from tqdm import tqdm
-import wandb
 
 from src.data import get_loader, split_data
 from src.eval import validation
@@ -11,7 +10,13 @@ from src.gnn import Model
 from src.train import train_eval
 
 
-def nested_cv(data: HeteroData, outer: int = 3, inner: int = 2) -> tuple[float, list[dict]]:
+def run_nested_cv(
+    data: HeteroData,
+    graph_type: str,
+    tracker,
+    outer: int = 3,
+    inner: int = 2,
+) -> tuple[float, list[dict]]:
     param_grid = {
         "lr": [0.005, 0.001],
         "hidden_channels": [64, 128],
@@ -24,43 +29,39 @@ def nested_cv(data: HeteroData, outer: int = 3, inner: int = 2) -> tuple[float, 
     outer_test_results = []
     best_params_per_outer: list[dict] = []
 
-    for i, _ in enumerate(tqdm(range(outer), desc="Outer CV Folds")):
+    for i in range(outer):
+        print(f"\n--- Outer Fold {i + 1}/{outer} ---")
         outer_train_data, _, outer_test_data = split_data(data, val_ratio=0.0, test_ratio=0.2)
         outer_test_loader = get_loader(outer_test_data, batch_size=128, shuffle=False)
 
-        best_inner_val_loss = float("inf")
+        best_inner_roc_auc = -float("inf")
         best_params: dict = {}
 
         for j, params in enumerate(tqdm(param_combinations, desc="Inner CV Hyperparameter Combinations", leave=False)):
-            combo_name = f"LR:{params['lr']} | HC:{params['hidden_channels']} | OC:{params['out_channels']}"
-            wandb.init(
-                entity="medal-upm",
-                project="drug-comb-gnn",
-                name=f"lr_{params['lr']}_hc_{params['hidden_channels']}_oc_{params['out_channels']}",
-                group=f"outer_fold_{i}",
-                config={**params, "combo_name": combo_name},
-                reinit=True,
+            # Create structured config
+            config = tracker.get_structured_config(data, graph_type, params)
+
+            # Initialize Audit run
+            tracker.init_run(
+                name=f"Audit_{graph_type}_Fold_{i}_Combo_{j}",
+                group=f"Audit_{graph_type}_Fold_{i}",
+                config=config,
+                job_type="audit",
+                fold=i,
             )
 
-            inner_val_losses = []
+            inner_roc_aucs = []
 
             for _ in range(inner):
-                # Clone the outer training data to ensure a clean split for each inner fold
+                # Clone and clean as before
                 clean_outer_train_data = outer_train_data.clone()
-
-                # Clean up edge_labels
                 for edge_type in clean_outer_train_data.edge_types:
                     if "edge_label" in clean_outer_train_data[edge_type]:
                         del clean_outer_train_data[edge_type].edge_label
                     if "edge_label_index" in clean_outer_train_data[edge_type]:
                         del clean_outer_train_data[edge_type].edge_label_index
 
-                # Use clean data
-                inner_train_data, inner_val_data, _ = split_data(
-                    clean_outer_train_data,
-                    val_ratio=0.2,
-                    test_ratio=0.0,
-                )
+                inner_train_data, inner_val_data, _ = split_data(clean_outer_train_data, val_ratio=0.2, test_ratio=0.0)
 
                 inner_train_loader = get_loader(inner_train_data, batch_size=128, shuffle=True)
                 inner_val_loader = get_loader(inner_val_data, batch_size=128, shuffle=False)
@@ -77,21 +78,20 @@ def nested_cv(data: HeteroData, outer: int = 3, inner: int = 2) -> tuple[float, 
                     inner_val_loader,
                     lr=params["lr"],
                     show_progress=False,
-                    fold_idx=i,
+                    tracker=tracker,  # Training metrics logged per inner fold
                 )
-                inner_val_losses.append(min(history["valid_loss"]))
+                inner_roc_aucs.append(max(history["roc_auc"]))
 
-            avg_val_loss = np.mean(inner_val_losses)
+            avg_roc_auc = np.mean(inner_roc_aucs)
+            tracker.finish()
 
-            wandb.log({"avg_val_loss": avg_val_loss})
-            wandb.finish()
-
-            if avg_val_loss < best_inner_val_loss:
-                best_inner_val_loss = avg_val_loss
+            if avg_roc_auc > best_inner_roc_auc:
+                best_inner_roc_auc = avg_roc_auc
                 best_params = params
 
         best_params_per_outer.append(best_params.copy())
 
+        # Final evaluation on this outer fold
         final_model = Model(
             hidden_channels=best_params["hidden_channels"],
             out_channels=best_params["out_channels"],
@@ -104,12 +104,12 @@ def nested_cv(data: HeteroData, outer: int = 3, inner: int = 2) -> tuple[float, 
             outer_train_loader,
             outer_test_loader,
             lr=best_params["lr"],
-            show_progress=False,
+            show_progress=True,
         )
 
-        test_loss, test_report = validation(final_model, outer_test_loader)
-        print(test_report)
-        outer_test_results.append(test_loss)
+        test_loss, metrics = validation(final_model, outer_test_loader)
+        print(f"Test Loss: {test_loss:.4f} | ROC AUC: {metrics['roc_auc']:.4f}")
+        outer_test_results.append(metrics['roc_auc'])
 
-    final_generalization_loss = float(np.mean(outer_test_results))
-    return final_generalization_loss, best_params_per_outer
+    final_generalization_auc = float(np.mean(outer_test_results))
+    return final_generalization_auc, best_params_per_outer

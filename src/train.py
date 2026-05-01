@@ -18,7 +18,7 @@ def train_eval(
     val_loader: LinkNeighborLoader,
     lr: float,
     show_progress: bool = True,
-    fold_idx: int | None = None,
+    tracker=None,  # Pass the tracker
 ) -> tuple[Model, dict]:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -27,29 +27,31 @@ def train_eval(
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
 
     best_model_weights = deepcopy(model.state_dict())
-    best_val_loss = float("inf")
+    best_roc_auc = -float("inf")
 
-    history = {"train_loss": [None] * EPOCHS, "valid_loss": [None] * EPOCHS, "saved_model": False}
+    history = {"train_loss": [None] * EPOCHS, "valid_loss": [None] * EPOCHS, "roc_auc": [None] * EPOCHS, "saved_model": False}
 
     for epoch in tqdm.tqdm(range(EPOCHS), desc="Training Epochs", disable=not show_progress):
         train_loss = train(model, train_loader, optimizer, device)
 
         model.eval()
-        val_loss, _ = validation(model, val_loader)
+        val_loss, metrics = validation(model, val_loader)
 
         # Save metrics
         history["train_loss"][epoch] = train_loss
         history["valid_loss"][epoch] = val_loss
+        history["roc_auc"][epoch] = metrics["roc_auc"]
 
         scheduler.step()
 
-        if wandb.run is not None:
-            wandb.log({f"train_loss_fold_{fold_idx}": train_loss, f"val_loss_fold_{fold_idx}": val_loss})
+        if tracker is not None:
+            metrics["train_loss"] = train_loss
+            tracker.log_metrics(metrics, epoch=epoch)
 
-        # Check for local best model based on validation loss
-        if val_loss < best_val_loss:
+        # Check for local best model based on validation ROC AUC
+        if metrics["roc_auc"] > best_roc_auc:
             best_model_weights = deepcopy(model.state_dict())
-            best_val_loss = val_loss
+            best_roc_auc = metrics["roc_auc"]
 
     model.load_state_dict(best_model_weights)
     return model, history
