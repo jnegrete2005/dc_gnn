@@ -1,5 +1,3 @@
-import numpy as np
-import torch
 import wandb
 
 from src.data import get_loader, split_data
@@ -21,14 +19,11 @@ def sweep_train(offline: bool = False):
     structured_config = _SWEEP_TRACKER.get_structured_config(_SWEEP_DATA, _SWEEP_GRAPH_TYPE, dict(wandb.config))
     structured_config["metadata"] = {
         "job_type": "sweep",
-        "fold": None
+        "fold": None,
     }
-    
+
     # Update wandb config with structured format and metadata
     wandb.config.update(structured_config, allow_val_change=True)
-    
-    # Set the job_type for the run explicitly since we didn't use init_run
-    run.job_type = "sweep"
 
     # Train on full data for the sweep (Step 4)
     train_data, val_data, _ = split_data(_SWEEP_DATA, val_ratio=0.2, test_ratio=0.0)
