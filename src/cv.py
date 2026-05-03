@@ -10,6 +10,21 @@ from src.gnn import Model
 from src.train import train_eval
 
 
+def compute_metrics_range(metrics_list):
+    ranges = {}
+    if not metrics_list:
+        return ranges
+    keys = [k for k in metrics_list[0].keys() if isinstance(metrics_list[0][k], (int, float))]
+    for k in keys:
+        values = [m[k] for m in metrics_list]
+        ranges[k] = {
+            "min": float(np.min(values)),
+            "max": float(np.max(values)),
+            "range": float(np.max(values) - np.min(values))
+        }
+    return ranges
+
+
 def run_nested_cv(
     data: HeteroData,
     graph_type: str,
@@ -28,7 +43,7 @@ def run_nested_cv(
     keys, values = zip(*param_grid.items())
     param_combinations = [dict(zip(keys, v)) for v in itertools.product(*values)]
     outer_test_results = []
-    best_params_per_outer: list[dict] = []
+    report = []
 
     for i in range(outer):
         print(f"\n--- Outer Fold {i + 1}/{outer} ---")
@@ -37,6 +52,7 @@ def run_nested_cv(
 
         best_inner_roc_auc = -float("inf")
         best_params: dict = {}
+        best_inner_metrics_list = []
 
         for j, params in enumerate(tqdm(param_combinations, desc="Inner CV Hyperparameter Combinations", leave=False)):
             # Create structured config
@@ -53,6 +69,7 @@ def run_nested_cv(
             )
 
             inner_roc_aucs = []
+            inner_metrics_list = []
 
             for _ in range(inner):
                 # Clone and clean as before
@@ -74,7 +91,7 @@ def run_nested_cv(
                     data=inner_train_data,
                 )
 
-                _, history = train_eval(
+                trained_model, history = train_eval(
                     model,
                     inner_train_loader,
                     inner_val_loader,
@@ -82,7 +99,11 @@ def run_nested_cv(
                     show_progress=False,
                     tracker=tracker,  # Training metrics logged per inner fold
                 )
-                inner_roc_aucs.append(max(history["roc_auc"]))
+                
+                # Evaluate the best inner fold model on the inner validation set to get all metrics
+                _, inner_metrics = validation(trained_model, inner_val_loader)
+                inner_roc_aucs.append(inner_metrics["roc_auc"])
+                inner_metrics_list.append(inner_metrics)
 
             avg_roc_auc = np.mean(inner_roc_aucs)
             tracker.finish()
@@ -90,8 +111,10 @@ def run_nested_cv(
             if avg_roc_auc > best_inner_roc_auc:
                 best_inner_roc_auc = avg_roc_auc
                 best_params = params
+                best_inner_metrics_list = inner_metrics_list
 
-        best_params_per_outer.append(best_params.copy())
+        # Compute range summary for the best inner fold metrics
+        inner_metrics_range = compute_metrics_range(best_inner_metrics_list)
 
         # Final evaluation on this outer fold
         final_model = Model(
@@ -113,5 +136,13 @@ def run_nested_cv(
         print(f"Test Loss: {test_loss:.4f} | ROC AUC: {metrics['roc_auc']:.4f}")
         outer_test_results.append(metrics['roc_auc'])
 
+        fold_report = {
+            "fold": i + 1,
+            "best_params": best_params.copy(),
+            "inner_metrics_range": inner_metrics_range,
+            "outer_metrics": metrics
+        }
+        report.append(fold_report)
+
     final_generalization_auc = float(np.mean(outer_test_results))
-    return final_generalization_auc, best_params_per_outer
+    return final_generalization_auc, report

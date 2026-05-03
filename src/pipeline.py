@@ -50,7 +50,7 @@ class GraphPipeline:
         # Step 3: Run Nested CV (Auditing)
         self.logger.info("Step 3: Running Nested CV (Auditing)...")
         try:
-            generalization_auc, _ = run_nested_cv(
+            generalization_auc, report = run_nested_cv(
                 self.data,
                 self.graph_type,
                 self.tracker,
@@ -62,6 +62,13 @@ class GraphPipeline:
         except Exception as e:
             self.logger.error(f"Error during Nested CV: {str(e)}")
             raise e
+
+        if offline:
+            return {
+                "graph_type": self.graph_type,
+                "generalization_auc": generalization_auc,
+                "report": report,
+            }
 
         # Step 4: Run Sweep (Optimization on 100% data)
         self.logger.info("Step 4: Running Hyperparameter Sweep (Optimization)...")
@@ -78,16 +85,14 @@ class GraphPipeline:
             "graph_type": self.graph_type,
             "generalization_auc": generalization_auc,
             "sweep_status": sweep_results.get("status"),
+            "report": report,
         }
 
-    def execute_dry_run(self, wandb_local: bool = False):
+    def execute_dry_run(self):
         """
         Runs a single training and validation cycle with default parameters.
         If wandb_local is True, it runs the full pipeline but in offline mode.
         """
-        if wandb_local:
-            return self.execute(audit_outer=3, audit_inner=2, sweep_count=5, offline=True)
-
         self.logger.info(f"STARTING DRY-RUN FOR: {self.graph_type}")
 
         # 1. Split Data
