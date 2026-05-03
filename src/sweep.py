@@ -12,9 +12,10 @@ _SWEEP_GRAPH_TYPE = None
 _SWEEP_TRACKER = None
 
 
-def sweep_train():
+def sweep_train(offline: bool = False):
     # Use a dummy config first to get parameters from sweep agent
-    run = wandb.init()
+    mode = "offline" if offline else "online"
+    run = wandb.init(mode=mode)
     
     # Get structured config and add metadata
     structured_config = _SWEEP_TRACKER.get_structured_config(_SWEEP_DATA, _SWEEP_GRAPH_TYPE, dict(wandb.config))
@@ -51,7 +52,7 @@ def sweep_train():
     wandb.log({"roc_auc": final_roc_auc})
 
 
-def run_sweep(data, graph_type, tracker, count=20):
+def run_sweep(data, graph_type, tracker, count=20, offline: bool = False):
     global _SWEEP_DATA, _SWEEP_GRAPH_TYPE, _SWEEP_TRACKER
     _SWEEP_DATA = data
     _SWEEP_GRAPH_TYPE = graph_type
@@ -68,7 +69,12 @@ def run_sweep(data, graph_type, tracker, count=20):
     }
 
     sweep_id = wandb.sweep(sweep_config, project="drug-comb-gnn")
-    wandb.agent(sweep_id, function=sweep_train, count=count)
+
+    # We need to wrap sweep_train to pass the offline parameter
+    from functools import partial
+    train_func = partial(sweep_train, offline=offline)
+
+    wandb.agent(sweep_id, function=train_func, count=count)
 
     # In a real scenario, you'd fetch the best params from W&B API here
     # and return them. For now, we'll just complete the sweep.

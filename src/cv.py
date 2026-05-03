@@ -16,6 +16,7 @@ def run_nested_cv(
     tracker,
     outer: int = 3,
     inner: int = 2,
+    offline: bool = False,
 ) -> tuple[float, list[dict]]:
     param_grid = {
         "lr": [0.005, 0.001],
@@ -48,6 +49,7 @@ def run_nested_cv(
                 config=config,
                 job_type="audit",
                 fold=i,
+                offline=offline,
             )
 
             inner_roc_aucs = []

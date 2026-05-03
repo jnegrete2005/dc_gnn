@@ -3,7 +3,7 @@ import torch.nn.functional as F
 from torch_geometric.loader import LinkNeighborLoader
 import numpy as np
 
-from sklearn.metrics import classification_report, roc_auc_score, f1_score, precision_recall_curve
+from sklearn.metrics import classification_report, roc_auc_score, f1_score, precision_recall_curve, average_precision_score
 
 from src.gnn import Model
 
@@ -40,7 +40,7 @@ def calculate_hits_at_k(y_true: np.ndarray, y_score: np.ndarray, query_ids: np.n
     return float(np.mean(hits)) if len(hits) > 0 else 0.0
 
 
-def validation(model: Model, val_loader: LinkNeighborLoader):
+def validation(model: Model, val_loader: LinkNeighborLoader, k: int = 5):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     model = model.to(device)
@@ -87,9 +87,10 @@ def validation(model: Model, val_loader: LinkNeighborLoader):
     # Calculate metrics for W&B
     roc_auc = roc_auc_score(ground_truth_np, pred_probs)
     f1 = f1_score(ground_truth_np, preds_binary, zero_division=0.0)
+    ap = average_precision_score(ground_truth_np, pred_probs)
 
-    # Calculate the new strict ranking Hits@5
-    hits_at_k = calculate_hits_at_k(ground_truth_np, pred_probs, query_ids, k=3)
+    # Calculate the new strict ranking Hits@K
+    hits_at_k = calculate_hits_at_k(ground_truth_np, pred_probs, query_ids, k=k)
 
     class_report = classification_report(ground_truth_np, preds_binary, zero_division=0.0)
 
@@ -97,7 +98,8 @@ def validation(model: Model, val_loader: LinkNeighborLoader):
         "val_loss": val_loss,
         "roc_auc": roc_auc,
         "f1": f1,
-        "hits_at_k": hits_at_k,
+        "ap": ap,
+        f"hits_at_{k}": hits_at_k,
         "class_report": class_report,
         "optimal_threshold": float(optimal_threshold),
     }

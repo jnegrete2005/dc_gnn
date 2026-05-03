@@ -58,12 +58,14 @@ class WandbTracker:
             },
         }
 
-    def init_run(self, name: str, group: str, config: dict, job_type: str, fold: int | None = None):
+    def init_run(self, name: str, group: str, config: dict, job_type: str, fold: int | None = None, offline: bool = False):
         # Add metadata to config
         config["metadata"] = {
             "job_type": job_type,
             "fold": fold,
         }
+
+        mode = "offline" if offline else "online"
 
         return wandb.init(
             entity=self.entity,
@@ -73,19 +75,28 @@ class WandbTracker:
             config=config,
             job_type=job_type,
             reinit=True,
+            mode=mode,
         )
 
     def log_metrics(self, metrics: dict, epoch: int = None):
         """
-        Expects a dictionary with keys like 'val_loss', 'roc_auc', 'f1', 'hits_at_k'
+        Expects a dictionary with keys like 'val_loss', 'roc_auc', 'f1', 'hits_at_k', 'ap'
         """
         formatted_metrics = {
-            "output/Hits@5": metrics.get("hits_at_k"),
             "output/ROC_AUC": metrics.get("roc_auc"),
             "output/F1_score": metrics.get("f1"),
+            "output/AP": metrics.get("ap"),
             "output/val_loss": metrics.get("val_loss"),
             "output/optimal_threshold": metrics.get("optimal_threshold"),
         }
+
+        # Dynamically find hits_at_k keys (e.g., 'hits_at_5')
+        for key in metrics:
+            if key.startswith("hits_at_"):
+                # Format for W&B: 'hits_at_5' -> 'output/Hits@5'
+                k_val = key.split("_")[-1]
+                formatted_metrics[f"output/Hits@{k_val}"] = metrics[key]
+
         if epoch is not None:
             formatted_metrics["epoch"] = epoch
 

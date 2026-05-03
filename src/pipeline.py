@@ -44,8 +44,8 @@ class GraphPipeline:
             self.logger.addHandler(fh)
             self.logger.addHandler(ch)
 
-    def execute(self, audit_outer: int = 5, audit_inner: int = 2, sweep_count: int = 20):
-        self.logger.info(f"STARTING PIPELINE FOR: {self.graph_type}")
+    def execute(self, audit_outer: int = 5, audit_inner: int = 2, sweep_count: int = 20, offline: bool = False):
+        self.logger.info(f"STARTING PIPELINE FOR: {self.graph_type} (Offline: {offline})")
 
         # Step 3: Run Nested CV (Auditing)
         self.logger.info("Step 3: Running Nested CV (Auditing)...")
@@ -56,6 +56,7 @@ class GraphPipeline:
                 self.tracker,
                 outer=audit_outer,
                 inner=audit_inner,
+                offline=offline,
             )
             self.logger.info(f"Audit complete. Generalization ROC AUC: {generalization_auc:.4f}")
         except Exception as e:
@@ -65,7 +66,7 @@ class GraphPipeline:
         # Step 4: Run Sweep (Optimization on 100% data)
         self.logger.info("Step 4: Running Hyperparameter Sweep (Optimization)...")
         try:
-            sweep_results = run_sweep(self.data, self.graph_type, self.tracker, count=sweep_count)
+            sweep_results = run_sweep(self.data, self.graph_type, self.tracker, count=sweep_count, offline=offline)
             self.logger.info(f"Sweep Optimization complete: {sweep_results.get('status')}")
         except Exception as e:
             self.logger.error(f"Error during Sweep: {str(e)}")
@@ -79,11 +80,14 @@ class GraphPipeline:
             "sweep_status": sweep_results.get("status"),
         }
 
-    def execute_dry_run(self):
+    def execute_dry_run(self, wandb_local: bool = False):
         """
         Runs a single training and validation cycle with default parameters.
-        Bypasses Nested CV, Sweeps, and W&B tracking.
+        If wandb_local is True, it runs the full pipeline but in offline mode.
         """
+        if wandb_local:
+            return self.execute(audit_outer=3, audit_inner=2, sweep_count=5, offline=True)
+
         self.logger.info(f"STARTING DRY-RUN FOR: {self.graph_type}")
 
         # 1. Split Data

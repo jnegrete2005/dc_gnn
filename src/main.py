@@ -6,6 +6,7 @@ from src.pipeline import GraphPipeline
 def main():
     parser = argparse.ArgumentParser(description="GNN Pipeline for Drug-Disease Link Prediction")
     parser.add_argument("--dry-run", action="store_true", help="Run a single training cycle without W&B logging")
+    parser.add_argument("--wandb-dry-run", action="store_true", help="Run the full pipeline with local-only W&B logging")
     args = parser.parse_args()
 
     # --- Step 1: Define the graph to process ---
@@ -26,12 +27,16 @@ def main():
 
     if args.dry_run:
         results = pipeline.execute_dry_run()
+    elif args.wandb_dry_run:
+        results = pipeline.execute_dry_run(wandb_local=True)
     else:
         # Executes Step 3 (Nested CV Audit) and Step 4 (Bayesian Sweep Optimization)
         results = pipeline.execute(audit_outer=3, audit_inner=2, sweep_count=10)
 
     print(f"\nPipeline finished for {graph_type}.")
-    if not args.dry_run:
+    if args.wandb_dry_run:
+        print(f"Generalization ROC AUC (Nested CV): {results['generalization_auc']:.4f}")
+    elif not args.dry_run:
         print(f"Generalization ROC AUC (Nested CV): {results['generalization_auc']:.4f}")
 
     print(f"Detailed logs available at: log/pipeline_{graph_type}.log")
