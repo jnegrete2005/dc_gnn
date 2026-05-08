@@ -15,36 +15,39 @@ def sweep_train(offline: bool = False):
     mode = "offline" if offline else "online"
     run = wandb.init(mode=mode)
     
-    # Get structured config and add metadata
-    structured_config = _SWEEP_TRACKER.get_structured_config(_SWEEP_DATA, _SWEEP_GRAPH_TYPE, dict(wandb.config))
-    structured_config["metadata"] = {
-        "job_type": "sweep",
-        "fold": None,
-    }
+    try:
+        # Get structured config and add metadata
+        structured_config = _SWEEP_TRACKER.get_structured_config(_SWEEP_DATA, _SWEEP_GRAPH_TYPE, dict(wandb.config))
+        structured_config["metadata"] = {
+            "job_type": "sweep",
+            "fold": None,
+        }
 
-    # Update wandb config with structured format and metadata
-    wandb.config.update(structured_config, allow_val_change=True)
+        # Update wandb config with structured format and metadata
+        wandb.config.update(structured_config, allow_val_change=True)
 
-    # Train on full data for the sweep (Step 4)
-    train_data, val_data, _ = split_data(_SWEEP_DATA, val_ratio=0.2, test_ratio=0.0)
+        # Train on full data for the sweep (Step 4)
+        train_data, val_data, _ = split_data(_SWEEP_DATA, val_ratio=0.2, test_ratio=0.0)
 
-    train_loader = get_loader(train_data, batch_size=128, shuffle=True)
-    val_loader = get_loader(val_data, batch_size=128, shuffle=False)
+        train_loader = get_loader(train_data, batch_size=128, shuffle=True)
+        val_loader = get_loader(val_data, batch_size=128, shuffle=False)
 
-    model = Model(
-        hidden_channels=wandb.config.model["hidden_channels"],
-        out_channels=wandb.config.model["out_channels"],
-        data=train_data,
-    )
+        model = Model(
+            hidden_channels=wandb.config.model["hidden_channels"],
+            out_channels=wandb.config.model["out_channels"],
+            data=train_data,
+        )
 
-    # Train and log using tracker
-    _, history = train_eval(
-        model, train_loader, val_loader, lr=wandb.config.model["lr"], show_progress=False, tracker=_SWEEP_TRACKER
-    )
+        # Train and log using tracker
+        _, history = train_eval(
+            model, train_loader, val_loader, lr=wandb.config.model["lr"], show_progress=False, tracker=_SWEEP_TRACKER
+        )
 
-    final_roc_auc = max(history["roc_auc"])
-    # Return the metric W&B sweep uses to optimize
-    wandb.log({"roc_auc": final_roc_auc})
+        final_roc_auc = max(history["roc_auc"])
+        # Return the metric W&B sweep uses to optimize
+        wandb.log({"roc_auc": final_roc_auc})
+    finally:
+        run.finish()
 
 
 def run_sweep(data, graph_type, tracker, count=20, offline: bool = False):
@@ -71,6 +74,5 @@ def run_sweep(data, graph_type, tracker, count=20, offline: bool = False):
 
     wandb.agent(sweep_id, function=train_func, count=count)
 
-    # In a real scenario, you'd fetch the best params from W&B API here
-    # and return them. For now, we'll just complete the sweep.
+    print(f"\n[Sweep] Agent finished {count} runs. Closing sweep...")
     return {"status": "sweep_completed"}
