@@ -16,14 +16,14 @@ def main():
     parser.add_argument(
         "--wandb-dry-run",
         action="store_true",
-        help="Run the full pipeline with local-only W&B logging",
+        help="Run the nested cv with local-only W&B logging",
     )
     args = parser.parse_args()
 
     # --- Step 1: Define the graph to process ---
     # This matches the "Input" tracking section
-    graph_path = "data/graph_ones.pt"
-    graph_type = "baseline_baseline_ones"
+    graph_path = "data/graph.pt"
+    graph_type = "baseline_baseline_rich"
 
     print(f"Loading data for graph type: {graph_type}...")
     try:
@@ -45,24 +45,24 @@ def main():
         results = pipeline.execute(audit_outer=3, audit_inner=2, sweep_count=10)
 
     print(f"\nPipeline finished for {graph_type}.")
-    
+
     if args.wandb_dry_run:
         print(f"Generalization ROC AUC (Nested CV): {results['generalization_auc']:.4f}")
-        
+
         # Pretty print the detailed report for Nested CV stability
         if "report" in results:
             print("\n" + "=" * 60)
             print("NESTED CV DETAILED REPORT (STABILITY ANALYSIS)")
             print("=" * 60)
-            
+
             printable_report = deepcopy(results["report"])
             for fold in printable_report:
                 if "outer_metrics" in fold:
                     fold["outer_metrics"].pop("class_report", None)
-            
+
             print(json.dumps(printable_report, indent=4))
             print("=" * 60 + "\n")
-            
+
     elif not args.dry_run:
         print(f"Generalization ROC AUC (Nested CV): {results['generalization_auc']:.4f}")
 

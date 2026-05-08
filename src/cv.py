@@ -20,7 +20,7 @@ def compute_metrics_range(metrics_list):
         ranges[k] = {
             "min": float(np.min(values)),
             "max": float(np.max(values)),
-            "range": float(np.max(values) - np.min(values))
+            "range": float(np.max(values) - np.min(values)),
         }
     return ranges
 
@@ -91,7 +91,7 @@ def run_nested_cv(
                     data=inner_train_data,
                 )
 
-                trained_model, history = train_eval(
+                trained_model, _ = train_eval(
                     model,
                     inner_train_loader,
                     inner_val_loader,
@@ -99,7 +99,7 @@ def run_nested_cv(
                     show_progress=False,
                     tracker=tracker,  # Training metrics logged per inner fold
                 )
-                
+
                 # Evaluate the best inner fold model on the inner validation set to get all metrics
                 _, inner_metrics = validation(trained_model, inner_val_loader)
                 inner_roc_aucs.append(inner_metrics["roc_auc"])
@@ -134,13 +134,13 @@ def run_nested_cv(
 
         test_loss, metrics = validation(final_model, outer_test_loader)
         print(f"Test Loss: {test_loss:.4f} | ROC AUC: {metrics['roc_auc']:.4f}")
-        outer_test_results.append(metrics['roc_auc'])
+        outer_test_results.append(metrics["roc_auc"])
 
         fold_report = {
             "fold": i + 1,
             "best_params": best_params.copy(),
             "inner_metrics_range": inner_metrics_range,
-            "outer_metrics": metrics
+            "outer_metrics": metrics,
         }
         report.append(fold_report)
 
