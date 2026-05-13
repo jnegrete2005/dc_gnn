@@ -7,6 +7,7 @@ from src.data import split_data, get_loader
 from src.gnn import Model
 from src.train import train_eval
 from src.eval import validation
+from src.plot import plot_loss_curves
 
 
 class GraphPipeline:
@@ -50,7 +51,7 @@ class GraphPipeline:
         # Step 3: Run Nested CV (Auditing)
         self.logger.info("Step 3: Running Nested CV (Auditing)...")
         try:
-            generalization_auc, report = run_nested_cv(
+            generalization_auc, train_auc, report = run_nested_cv(
                 self.data,
                 self.graph_type,
                 self.tracker,
@@ -59,6 +60,19 @@ class GraphPipeline:
                 offline=offline,
             )
             self.logger.info(f"Audit complete. Generalization ROC AUC: {generalization_auc:.4f}")
+
+            # Save loss curve plots
+            for fold in report:
+                fold_num = fold["fold"]
+                history = fold.get("history")
+                if history:
+                    plot_path = os.path.join("log", f"loss_curve_fold_{fold_num}.png")
+                    plot_loss_curves(history["train_loss"], history["valid_loss"], plot_path)
+                    self.logger.info(f"Saved loss curve plot for fold {fold_num} to {plot_path}")
+                
+                # Pop history to keep the report clean for printing/serialization
+                fold.pop("history", None)
+
         except Exception as e:
             self.logger.error(f"Error during Nested CV: {str(e)}")
             raise e
@@ -67,6 +81,7 @@ class GraphPipeline:
             return {
                 "graph_type": self.graph_type,
                 "generalization_auc": generalization_auc,
+                "train_auc": train_auc,
                 "report": report,
             }
 
@@ -84,6 +99,7 @@ class GraphPipeline:
         return {
             "graph_type": self.graph_type,
             "generalization_auc": generalization_auc,
+            "train_auc": train_auc,
             "sweep_status": sweep_results.get("status"),
             "report": report,
         }

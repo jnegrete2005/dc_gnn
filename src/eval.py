@@ -44,7 +44,7 @@ def validation(model: Model, val_loader: LinkNeighborLoader, k: int = 5):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     model = model.to(device)
-    model.eval()  # CRITICAL: Ensure Dropout and BatchNorm are turned off during validation!
+    model.eval()
 
     preds = []
     ground_truths = []
@@ -85,7 +85,10 @@ def validation(model: Model, val_loader: LinkNeighborLoader, k: int = 5):
     preds_binary = pred_probs >= optimal_threshold
 
     # Calculate metrics for W&B
-    roc_auc = roc_auc_score(ground_truth_np, pred_probs)
+    if len(np.unique(ground_truth_np)) > 1:
+        roc_auc = roc_auc_score(ground_truth_np, pred_probs)
+    else:
+        roc_auc = float("nan")
     f1 = f1_score(ground_truth_np, preds_binary, zero_division=0.0)
     ap = average_precision_score(ground_truth_np, pred_probs)
 

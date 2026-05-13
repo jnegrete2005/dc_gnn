@@ -47,6 +47,7 @@ def main():
     print(f"\nPipeline finished for {graph_type}.")
 
     if args.wandb_dry_run:
+        print(f"Average Training ROC AUC:        {results['train_auc']:.4f}")
         print(f"Generalization ROC AUC (Nested CV): {results['generalization_auc']:.4f}")
 
         # Pretty print the detailed report for Nested CV stability
@@ -59,12 +60,16 @@ def main():
             for fold in printable_report:
                 if "outer_metrics" in fold:
                     fold["outer_metrics"].pop("class_report", None)
+                if "train_metrics" in fold:
+                    fold["train_metrics"].pop("class_report", None)
 
             print(json.dumps(printable_report, indent=4))
             print("=" * 60 + "\n")
 
     elif not args.dry_run:
+        print(f"Average Training ROC AUC:        {results['train_auc']:.4f}")
         print(f"Generalization ROC AUC (Nested CV): {results['generalization_auc']:.4f}")
+
 
     print(f"Detailed logs available at: log/pipeline_{graph_type}.log")
 

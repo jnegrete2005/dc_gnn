@@ -23,7 +23,7 @@ def split_data(
     return transform(data)
 
 
-def get_loader(data: HeteroData, batch_size: int, shuffle: bool) -> LinkNeighborLoader:
+def get_loader(data: HeteroData, batch_size: int, shuffle: bool, neg_sampling: str | None = None) -> LinkNeighborLoader:
     edge_label_index = data["dc", "treats", "disease"].edge_label_index
     edge_label = data["dc", "treats", "disease"].edge_label
 
@@ -38,7 +38,8 @@ def get_loader(data: HeteroData, batch_size: int, shuffle: bool) -> LinkNeighbor
         ("dc", "rev_interacts", "drug"): dc_max_neighbors,
     }
 
-    neg_sampling: str | None = "binary" if shuffle else None  # Only apply negative sampling during training
+    if neg_sampling is None:
+        neg_sampling = "binary" if shuffle else None  # Only apply negative sampling during training by default
 
     return LinkNeighborLoader(
         data=data,

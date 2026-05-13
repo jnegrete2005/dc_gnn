@@ -32,7 +32,7 @@ def run_nested_cv(
     outer: int = 3,
     inner: int = 2,
     offline: bool = False,
-) -> tuple[float, list[dict]]:
+) -> tuple[float, float, list[dict]]:
     param_grid = {
         "lr": [0.005, 0.001],
         "hidden_channels": [64, 128],
@@ -43,6 +43,7 @@ def run_nested_cv(
     keys, values = zip(*param_grid.items())
     param_combinations = [dict(zip(keys, v)) for v in itertools.product(*values)]
     outer_test_results = []
+    outer_train_results = []
     report = []
 
     for i in range(outer):
@@ -124,7 +125,7 @@ def run_nested_cv(
         )
 
         outer_train_loader = get_loader(outer_train_data, batch_size=128, shuffle=True)
-        final_model, _ = train_eval(
+        final_model, history = train_eval(
             final_model,
             outer_train_loader,
             outer_test_loader,
@@ -132,17 +133,30 @@ def run_nested_cv(
             show_progress=True,
         )
 
+        # Evaluate on test set
         test_loss, metrics = validation(final_model, outer_test_loader)
-        print(f"Test Loss: {test_loss:.4f} | ROC AUC: {metrics['roc_auc']:.4f}")
+        
+        # Evaluate on training set
+        outer_train_eval_loader = get_loader(outer_train_data, batch_size=128, shuffle=False, neg_sampling="binary")
+        train_loss, train_metrics = validation(final_model, outer_train_eval_loader)
+
+        print(f"Fold {i + 1} Metrics:")
+        print(f"  Train -> Loss: {train_loss:.4f} | ROC AUC: {train_metrics['roc_auc']:.4f}")
+        print(f"  Test  -> Loss: {test_loss:.4f} | ROC AUC: {metrics['roc_auc']:.4f}")
+
         outer_test_results.append(metrics["roc_auc"])
+        outer_train_results.append(train_metrics["roc_auc"])
 
         fold_report = {
             "fold": i + 1,
             "best_params": best_params.copy(),
             "inner_metrics_range": inner_metrics_range,
             "outer_metrics": metrics,
+            "train_metrics": train_metrics,
+            "history": history,
         }
         report.append(fold_report)
 
     final_generalization_auc = float(np.mean(outer_test_results))
-    return final_generalization_auc, report
+    final_train_auc = float(np.mean(outer_train_results))
+    return final_generalization_auc, final_train_auc, report
