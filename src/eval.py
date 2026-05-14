@@ -8,7 +8,7 @@ from sklearn.metrics import classification_report, roc_auc_score, f1_score, prec
 from src.gnn import Model
 
 
-def calculate_hits_at_k(y_true: np.ndarray, y_score: np.ndarray, query_ids: np.ndarray, k: int = 5) -> float:
+def calculate_hits_at_k(y_true: np.ndarray, y_score: np.ndarray, query_ids: np.ndarray, k: int) -> float:
     """
     Industry-standard Hits@K for link prediction.
     Groups predictions by source node (query_id) and checks if the true positive
@@ -40,7 +40,7 @@ def calculate_hits_at_k(y_true: np.ndarray, y_score: np.ndarray, query_ids: np.n
     return float(np.mean(hits)) if len(hits) > 0 else 0.0
 
 
-def validation(model: Model, val_loader: LinkNeighborLoader, k: int = 5):
+def validation(model: Model, val_loader: LinkNeighborLoader, k: int):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     model = model.to(device)

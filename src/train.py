@@ -4,7 +4,6 @@ import torch
 import torch.nn.functional as F
 from torch_geometric.loader import LinkNeighborLoader
 import tqdm
-import wandb
 
 from src.eval import validation
 from src.gnn import Model
@@ -19,6 +18,7 @@ def train_eval(
     lr: float,
     show_progress: bool = True,
     tracker=None,  # Pass the tracker
+    k: int = None,
 ) -> tuple[Model, dict]:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -29,13 +29,18 @@ def train_eval(
     best_model_weights = deepcopy(model.state_dict())
     best_roc_auc = -float("inf")
 
-    history = {"train_loss": [None] * EPOCHS, "valid_loss": [None] * EPOCHS, "roc_auc": [None] * EPOCHS, "saved_model": False}
+    history = {
+        "train_loss": [None] * EPOCHS,
+        "valid_loss": [None] * EPOCHS,
+        "roc_auc": [None] * EPOCHS,
+        "saved_model": False,
+    }
 
     for epoch in tqdm.tqdm(range(EPOCHS), desc="Training Epochs", disable=not show_progress):
         train_loss = train(model, train_loader, optimizer, device)
 
         model.eval()
-        val_loss, metrics = validation(model, val_loader)
+        val_loss, metrics = validation(model, val_loader, k)
 
         # Save metrics
         history["train_loss"][epoch] = train_loss

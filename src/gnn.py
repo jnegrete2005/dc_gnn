@@ -1,53 +1,39 @@
 import torch
-import torch.nn.functional as F
 import torch.nn as nn
-from torch_geometric.nn import GATv2Conv, to_hetero
+import torch_geometric.nn as pyg_nn
 from torch_geometric.data import HeteroData
 
 FEATURE_DIM = 512
 
 
 class GNN(nn.Module):
-    def __init__(self, hidden_channels, out_channels, dropout=0.2):
+    def __init__(self, hidden_channels, out_channels, metadata, dropout=0.2):
         super().__init__()
         self.dropout = dropout
         self.preamble = nn.Sequential(
             nn.Linear(512, hidden_channels),
             nn.ReLU(),
-            nn.Linear(hidden_channels, hidden_channels),
-            nn.ReLU(),
-            nn.Linear(hidden_channels, hidden_channels),
-            nn.ReLU(),
+            nn.Dropout(dropout),
         )
 
-        heads = 4
-        gnn_hidden_channels = hidden_channels * heads
-        self.conv1 = GATv2Conv(hidden_channels, hidden_channels, heads=heads, add_self_loops=False, dropout=dropout)
-        self.conv2 = GATv2Conv(gnn_hidden_channels, hidden_channels, heads=heads, add_self_loops=False, dropout=dropout)
-        self.conv3 = GATv2Conv(gnn_hidden_channels, hidden_channels, heads=heads, add_self_loops=False, dropout=dropout)
-
-        self.postamble = nn.Sequential(
-            nn.Linear(gnn_hidden_channels, hidden_channels),
-            nn.ReLU(),
-            nn.Linear(hidden_channels, hidden_channels),
-            nn.ReLU(),
-            nn.Linear(hidden_channels, out_channels),
+        self.gnn_layers = pyg_nn.Sequential(
+            "x, edge_index",
+            [
+                (pyg_nn.SAGEConv(hidden_channels, hidden_channels), "x, edge_index -> x"),
+                nn.ReLU(inplace=True),
+                nn.Dropout(dropout),
+                (pyg_nn.SAGEConv(hidden_channels, out_channels), "x, edge_index -> x"),
+            ],
         )
 
-    def forward(self, x: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor:
-        x = self.preamble(x)
+        # Convert to hetero
+        self.preamble = pyg_nn.to_hetero(self.preamble, metadata)
+        self.gnn_layers = pyg_nn.to_hetero(self.gnn_layers, metadata, aggr="sum")
 
-        x = self.conv1(x, edge_index)
-        x = F.relu(x)
-
-        x = self.conv2(x, edge_index)
-        x = F.relu(x)
-
-        x = self.conv3(x, edge_index)
-        x = F.relu(x)
-
-        x = self.postamble(x)
-        return x
+    def forward(self, x_dict: dict, edge_index_dict: dict) -> dict:
+        x_dict = self.preamble(x_dict)
+        x_dict = self.gnn_layers(x_dict, edge_index_dict)
+        return x_dict
 
 
 class MLPEdgeDecoder(nn.Module):
@@ -80,8 +66,7 @@ class Model(nn.Module):
     def __init__(self, hidden_channels, out_channels, data: HeteroData, dropout=0.2):
         super().__init__()
 
-        self.encoder = GNN(hidden_channels, out_channels, dropout=dropout)
-        self.encoder = to_hetero(self.encoder, metadata=data.metadata(), aggr='sum')
+        self.encoder = GNN(hidden_channels, out_channels, data.metadata(), dropout=dropout)
 
         self.decoder = MLPEdgeDecoder(out_channels, dropout=dropout)
 
@@ -89,10 +74,6 @@ class Model(nn.Module):
         x_dict = data.x_dict
         x_dict = self.encoder(x_dict, data.edge_index_dict)
 
-        pred = self.decoder(
-            x_dict["dc"],
-            x_dict["disease"],
-            data["dc", "treats", "disease"].edge_label_index
-        )
+        pred = self.decoder(x_dict["dc"], x_dict["disease"], data["dc", "treats", "disease"].edge_label_index)
 
         return pred

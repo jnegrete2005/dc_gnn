@@ -32,6 +32,8 @@ def run_nested_cv(
     outer: int = 3,
     inner: int = 2,
     offline: bool = False,
+    k: int = None,
+    verbose: bool = True,
 ) -> tuple[float, float, list[dict]]:
     param_grid = {
         "lr": [0.005, 0.001],
@@ -47,7 +49,8 @@ def run_nested_cv(
     report = []
 
     for i in range(outer):
-        print(f"\n--- Outer Fold {i + 1}/{outer} ---")
+        if verbose:
+            print(f"\n--- Outer Fold {i + 1}/{outer} ---")
         outer_train_data, _, outer_test_data = split_data(data, val_ratio=0.0, test_ratio=0.2)
         outer_test_loader = get_loader(outer_test_data, batch_size=128, shuffle=False)
 
@@ -99,10 +102,11 @@ def run_nested_cv(
                     lr=params["lr"],
                     show_progress=False,
                     tracker=tracker,  # Training metrics logged per inner fold
+                    k=k,
                 )
 
                 # Evaluate the best inner fold model on the inner validation set to get all metrics
-                _, inner_metrics = validation(trained_model, inner_val_loader)
+                _, inner_metrics = validation(trained_model, inner_val_loader, k=k)
                 inner_roc_aucs.append(inner_metrics["roc_auc"])
                 inner_metrics_list.append(inner_metrics)
 
@@ -131,14 +135,15 @@ def run_nested_cv(
             outer_test_loader,
             lr=best_params["lr"],
             show_progress=True,
+            k=k,
         )
 
         # Evaluate on test set
-        test_loss, metrics = validation(final_model, outer_test_loader)
-        
+        test_loss, metrics = validation(final_model, outer_test_loader, k=k)
+
         # Evaluate on training set
         outer_train_eval_loader = get_loader(outer_train_data, batch_size=128, shuffle=False, neg_sampling="binary")
-        train_loss, train_metrics = validation(final_model, outer_train_eval_loader)
+        train_loss, train_metrics = validation(final_model, outer_train_eval_loader, k=k)
 
         print(f"Fold {i + 1} Metrics:")
         print(f"  Train -> Loss: {train_loss:.4f} | ROC AUC: {train_metrics['roc_auc']:.4f}")

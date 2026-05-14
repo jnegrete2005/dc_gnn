@@ -7,7 +7,8 @@ os.environ["WANDB_SILENT"] = "true"
 
 
 class WandbTracker:
-    def __init__(self, project_name: str = "drug-comb-gnn", entity: str = "medal-upm"):
+    def __init__(self, k: int, project_name: str = "drug-comb-gnn", entity: str = "medal-upm"):
+        self.k = k
         self.project_name = project_name
         self.entity = entity
 
@@ -58,7 +59,15 @@ class WandbTracker:
             },
         }
 
-    def init_run(self, name: str, group: str, config: dict, job_type: str, fold: int | None = None, offline: bool = False):
+    def init_run(
+        self,
+        name: str,
+        group: str,
+        config: dict,
+        job_type: str,
+        fold: int | None = None,
+        offline: bool = False,
+    ):
         # Add metadata to config
         config["metadata"] = {
             "job_type": job_type,
@@ -90,12 +99,8 @@ class WandbTracker:
             "output/optimal_threshold": metrics.get("optimal_threshold"),
         }
 
-        # Dynamically find hits_at_k keys (e.g., 'hits_at_5')
-        for key in metrics:
-            if key.startswith("hits_at_"):
-                # Format for W&B: 'hits_at_5' -> 'output/Hits@5'
-                k_val = key.split("_")[-1]
-                formatted_metrics[f"output/Hits@{k_val}"] = metrics[key]
+        key = f"hits_at_{self.k}"
+        formatted_metrics[f"output/Hits@{self.k}"] = metrics[key]
 
         if epoch is not None:
             formatted_metrics["epoch"] = epoch

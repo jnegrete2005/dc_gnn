@@ -11,10 +11,11 @@ from src.plot import plot_loss_curves
 
 
 class GraphPipeline:
-    def __init__(self, data, graph_type: str):
+    def __init__(self, data, graph_type: str, k: int):
         self.data = data
         self.graph_type = graph_type
-        self.tracker = WandbTracker()
+        self.tracker = WandbTracker(k)
+        self.k = k
         self._setup_logger()
 
     def _setup_logger(self):
@@ -58,6 +59,7 @@ class GraphPipeline:
                 outer=audit_outer,
                 inner=audit_inner,
                 offline=offline,
+                k=self.k,
             )
             self.logger.info(f"Audit complete. Generalization ROC AUC: {generalization_auc:.4f}")
 
@@ -69,7 +71,7 @@ class GraphPipeline:
                     plot_path = os.path.join("log", f"loss_curve_fold_{fold_num}.png")
                     plot_loss_curves(history["train_loss"], history["valid_loss"], plot_path)
                     self.logger.info(f"Saved loss curve plot for fold {fold_num} to {plot_path}")
-                
+
                 # Pop history to keep the report clean for printing/serialization
                 fold.pop("history", None)
 
@@ -88,7 +90,14 @@ class GraphPipeline:
         # Step 4: Run Sweep (Optimization on 100% data)
         self.logger.info("Step 4: Running Hyperparameter Sweep (Optimization)...")
         try:
-            sweep_results = run_sweep(self.data, self.graph_type, self.tracker, count=sweep_count, offline=offline)
+            sweep_results = run_sweep(
+                self.data,
+                self.graph_type,
+                self.tracker,
+                count=sweep_count,
+                offline=offline,
+                k=self.k,
+            )
             self.logger.info(f"Sweep Optimization complete: {sweep_results.get('status')}")
         except Exception as e:
             self.logger.error(f"Error during Sweep: {str(e)}")
@@ -137,11 +146,12 @@ class GraphPipeline:
             lr=0.005,
             show_progress=True,
             tracker=None,  # This disables W&B logging
+            k=self.k,
         )
 
         # 5. Final Evaluation
         self.logger.info("Running final evaluation on test set...")
-        test_loss, metrics = validation(model, test_loader)
+        test_loss, metrics = validation(model, test_loader, k=self.k)
 
         # Print results to console instead of logging for dry-run
         print("\n" + "=" * 50)

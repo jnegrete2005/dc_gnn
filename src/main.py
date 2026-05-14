@@ -34,7 +34,8 @@ def main():
 
     # --- Step 2 & 3: Run the Modular Pipeline ---
     # This class handles the Logger, W&B Tracker, and the 5-step workflow orchestration
-    pipeline = GraphPipeline(data, graph_type)
+    K = 3
+    pipeline = GraphPipeline(data, graph_type, K)
 
     if args.dry_run:
         results = pipeline.execute_dry_run()
@@ -47,29 +48,39 @@ def main():
     print(f"\nPipeline finished for {graph_type}.")
 
     if args.wandb_dry_run:
-        print(f"Average Training ROC AUC:        {results['train_auc']:.4f}")
-        print(f"Generalization ROC AUC (Nested CV): {results['generalization_auc']:.4f}")
+        print("\n" + "=" * 60)
+        print("NESTED CV SUMMARY (STABILITY ANALYSIS)")
+        print("=" * 60)
 
-        # Pretty print the detailed report for Nested CV stability
-        if "report" in results:
-            print("\n" + "=" * 60)
-            print("NESTED CV DETAILED REPORT (STABILITY ANALYSIS)")
-            print("=" * 60)
+        report = results.get("report", [])
+        if report:
+            # --- Test Metrics (Generalization) ---
+            print("\nTEST METRICS (OUTER FOLDS):")
+            metric_keys = [k for k, v in report[0]["outer_metrics"].items() if isinstance(v, (int, float))]
+            print(f"{'Metric':<20} | {'Average':<10} | {'Range (Max-Min)':<15}")
+            print("-" * 55)
+            for key in metric_keys:
+                values = [fold["outer_metrics"][key] for fold in report]
+                avg = sum(values) / len(values)
+                val_range = max(values) - min(values)
+                print(f"{key:<20} | {avg:<10.4f} | {val_range:<15.4f}")
 
-            printable_report = deepcopy(results["report"])
-            for fold in printable_report:
-                if "outer_metrics" in fold:
-                    fold["outer_metrics"].pop("class_report", None)
-                if "train_metrics" in fold:
-                    fold["train_metrics"].pop("class_report", None)
+            # --- Train Metrics ---
+            print("\nTRAIN METRICS (OUTER FOLDS):")
+            train_metric_keys = [k for k, v in report[0]["train_metrics"].items() if isinstance(v, (int, float))]
+            print(f"{'Metric':<20} | {'Average':<10} | {'Range (Max-Min)':<15}")
+            print("-" * 55)
+            for key in train_metric_keys:
+                values = [fold["train_metrics"][key] for fold in report]
+                avg = sum(values) / len(values)
+                val_range = max(values) - min(values)
+                print(f"{key:<20} | {avg:<10.4f} | {val_range:<15.4f}")
 
-            print(json.dumps(printable_report, indent=4))
-            print("=" * 60 + "\n")
+        print("\n" + "=" * 60 + "\n")
 
     elif not args.dry_run:
         print(f"Average Training ROC AUC:        {results['train_auc']:.4f}")
         print(f"Generalization ROC AUC (Nested CV): {results['generalization_auc']:.4f}")
-
 
     print(f"Detailed logs available at: log/pipeline_{graph_type}.log")
 

@@ -10,11 +10,11 @@ _SWEEP_GRAPH_TYPE = None
 _SWEEP_TRACKER = None
 
 
-def sweep_train(offline: bool = False):
+def sweep_train(offline: bool = False, k: int = None):
     # Use a dummy config first to get parameters from sweep agent
     mode = "offline" if offline else "online"
     run = wandb.init(mode=mode)
-    
+
     try:
         # Get structured config and add metadata
         structured_config = _SWEEP_TRACKER.get_structured_config(_SWEEP_DATA, _SWEEP_GRAPH_TYPE, dict(wandb.config))
@@ -40,17 +40,24 @@ def sweep_train(offline: bool = False):
 
         # Train and log using tracker
         _, history = train_eval(
-            model, train_loader, val_loader, lr=wandb.config.model["lr"], show_progress=False, tracker=_SWEEP_TRACKER
+            model,
+            train_loader,
+            val_loader,
+            lr=wandb.config.model["lr"],
+            show_progress=False,
+            tracker=_SWEEP_TRACKER,
+            k=k,
         )
 
         final_roc_auc = max(history["roc_auc"])
         # Return the metric W&B sweep uses to optimize
         wandb.log({"roc_auc": final_roc_auc})
+        run.finish()
     finally:
         run.finish()
 
 
-def run_sweep(data, graph_type, tracker, count=20, offline: bool = False):
+def run_sweep(data, graph_type, tracker, count=20, offline: bool = False, k: int = None):
     global _SWEEP_DATA, _SWEEP_GRAPH_TYPE, _SWEEP_TRACKER
     _SWEEP_DATA = data
     _SWEEP_GRAPH_TYPE = graph_type
@@ -70,7 +77,8 @@ def run_sweep(data, graph_type, tracker, count=20, offline: bool = False):
 
     # We need to wrap sweep_train to pass the offline parameter
     from functools import partial
-    train_func = partial(sweep_train, offline=offline)
+
+    train_func = partial(sweep_train, offline=offline, k=k)
 
     wandb.agent(sweep_id, function=train_func, count=count)
 
